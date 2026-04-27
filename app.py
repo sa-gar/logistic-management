@@ -345,13 +345,16 @@ def generate_delivery_challan_pdf(
     if logo_path and os.path.exists(logo_path):
         c.drawImage(
             logo_path,
-            140 * mm,
-            28 * mm,
-            width=40 * mm,
-            height=25 * mm,
+            130 * mm,
+            25 * mm,
+            width=55 * mm,
+            height=35 * mm,
             preserveAspectRatio=True,
             mask="auto",
         )
+    else:
+        c.setFont("Helvetica", 8)
+        c.drawString(130 * mm, 25 * mm, "Logo not found")
 
     c.save()
     return pdf_path
