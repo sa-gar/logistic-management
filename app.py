@@ -5,6 +5,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional
 import uuid
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import mm
+import tempfile
+
 
 
 class ShipmentStatus(Enum):
@@ -205,6 +210,121 @@ def item_options(system):
 
 def shipment_options(system):
     return {f"{sid} - {s.status.value}": sid for sid, s in system.shipments.items()}
+def generate_delivery_challan_pdf(
+    challan_no,
+    challan_date,
+    dispatch_date,
+    order_date,
+    ref_no,
+    consignee_name,
+    consignee_address,
+    company_name,
+    company_address,
+    place_of_supply,
+    gstin,
+    phone,
+    challan_type,
+    notes,
+    items,
+):
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    pdf_path = temp_file.name
+    temp_file.close()
+
+    c = canvas.Canvas(pdf_path, pagesize=A4)
+    width, height = A4
+
+    # Border
+    c.rect(12 * mm, 12 * mm, width - 24 * mm, height - 24 * mm)
+
+    # Title
+    c.setFont("Helvetica-Bold", 16)
+    c.drawCentredString(width / 2, height - 25 * mm, "DELIVERY CHALLAN")
+
+    c.setFont("Helvetica", 9)
+
+    # Left company block
+    y = height - 42 * mm
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(18 * mm, y, company_name)
+    c.setFont("Helvetica", 8)
+    y -= 5 * mm
+
+    for line in company_address.split("\n"):
+        c.drawString(18 * mm, y, line)
+        y -= 4 * mm
+
+    c.drawString(18 * mm, y, f"GSTIN: {gstin}")
+    y -= 4 * mm
+    c.drawString(18 * mm, y, f"Phone: {phone}")
+
+    # Right challan details
+    x = 125 * mm
+    y = height - 42 * mm
+    details = [
+        ("Delivery Challan #", challan_no),
+        ("Challan Date #", challan_date),
+        ("Dispatch Date #", dispatch_date),
+        ("Order Date #", order_date),
+        ("Ref #", ref_no),
+        ("Place of Supply", place_of_supply),
+        ("Challan Type", challan_type),
+    ]
+
+    for label, value in details:
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(x, y, label)
+        c.setFont("Helvetica", 8)
+        c.drawString(x + 35 * mm, y, str(value))
+        y -= 5 * mm
+
+    # Consignee
+    y = height - 92 * mm
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(18 * mm, y, "Consignee:")
+    y -= 5 * mm
+
+    c.drawString(18 * mm, y, consignee_name)
+    y -= 5 * mm
+
+    c.setFont("Helvetica", 8)
+    for line in consignee_address.split("\n"):
+        c.drawString(18 * mm, y, line)
+        y -= 4 * mm
+
+    # Notes
+    y -= 4 * mm
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(18 * mm, y, "Notes:")
+    c.setFont("Helvetica", 8)
+    c.drawString(35 * mm, y, notes)
+
+    # Item table
+    table_y = height - 135 * mm
+    c.setFont("Helvetica-Bold", 9)
+
+    c.rect(18 * mm, table_y, 174 * mm, 10 * mm)
+    c.drawString(22 * mm, table_y + 3 * mm, "SR No.")
+    c.drawString(45 * mm, table_y + 3 * mm, "ITEM DESCRIPTION")
+    c.drawString(170 * mm, table_y + 3 * mm, "QTY")
+
+    row_y = table_y - 10 * mm
+    c.setFont("Helvetica", 9)
+
+    for index, item in enumerate(items, start=1):
+        c.rect(18 * mm, row_y, 174 * mm, 10 * mm)
+        c.drawString(22 * mm, row_y + 3 * mm, str(index))
+        c.drawString(45 * mm, row_y + 3 * mm, item["description"])
+        c.drawString(172 * mm, row_y + 3 * mm, str(item["qty"]))
+        row_y -= 10 * mm
+
+    # Footer
+    c.setFont("Helvetica", 8)
+    c.drawString(18 * mm, 22 * mm, "OUTWARD")
+    c.drawRightString(width - 18 * mm, 22 * mm, "Page 1")
+
+    c.save()
+    return pdf_path
 
 
 st.set_page_config(page_title="Logistics Management System", layout="wide")
@@ -216,16 +336,17 @@ st.caption("Warehouse ↔ Sites | Site ↔ Site material movement")
 
 menu = st.sidebar.radio(
     "Navigation",
-    [
-        "Dashboard",
-        "Locations",
-        "Items",
-        "Vehicles",
-        "Inventory",
-        "Create Shipment",
-        "Manage Shipments",
-        "Reports",
-    ],
+   [
+    "Dashboard",
+    "Locations",
+    "Items",
+    "Vehicles",
+    "Inventory",
+    "Create Shipment",
+    "Manage Shipments",
+    "Generate Delivery Challan",
+    "Reports",
+],
 )
 
 if menu == "Dashboard":
@@ -453,6 +574,115 @@ elif menu == "Manage Shipments":
                 st.rerun()
             except Exception as e:
                 st.error(str(e))
+                elif menu == "Generate Delivery Challan":
+    st.subheader("Generate Delivery Challan")
+
+    loc_map = location_options(system)
+    item_map = item_options(system)
+
+    with st.form("dc_form"):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            challan_no = st.text_input("Delivery Challan #", "APH-62")
+            challan_date = st.date_input("Challan Date")
+            dispatch_date = st.date_input("Dispatch Date")
+            order_date = st.date_input("Order Date")
+            ref_no = st.text_input("Ref #", "PMW_374909")
+            place_of_supply = st.text_input("Place of Supply", "Karnataka")
+
+        with col2:
+            gstin = st.text_input("GSTIN", "29ATFPP7294R1ZF")
+            phone = st.text_input("Phone", "+91 8951975583")
+            challan_type = st.text_input("Challan Type", "Material/Accessories")
+            notes = st.text_input("Notes", "FOR REPAIRING")
+
+        st.markdown("### Company Details")
+
+        company_name = st.text_input(
+            "Company Name",
+            "ZOBOCON ENGINEERING PVT LTD",
+        )
+
+        company_address = st.text_area(
+            "Company Address",
+            "25, 2nd Floor, Karna Sree Point, Opposite Kalamandir Outer Ring Road,\n"
+            "Service Rd, Marathahalli, Bengaluru, Karnataka 560037",
+        )
+
+        st.markdown("### Consignee Details")
+
+        consignee_name = st.text_input(
+            "Consignee Name",
+            "ZOBOCON ENGINEERING PVT LTD",
+        )
+
+        consignee_address = st.text_area(
+            "Consignee Address",
+            "25, 2nd Floor, Karna Sree Point, Opposite Kalamandir Outer Ring Road,\n"
+            "Service Rd, Marathahalli, Bengaluru, Karnataka 560037",
+        )
+
+        st.markdown("### Items")
+
+        items = []
+
+        for i in range(1, 6):
+            col_a, col_b = st.columns([4, 1])
+
+            with col_a:
+                description = st.text_input(
+                    f"Item Description {i}",
+                    "Bison Plus Wall Putty (Pac-40kg)" if i == 1 else "",
+                    key=f"dc_item_desc_{i}",
+                )
+
+            with col_b:
+                qty = st.number_input(
+                    f"Qty {i}",
+                    min_value=0,
+                    value=15 if i == 1 else 0,
+                    key=f"dc_qty_{i}",
+                )
+
+            if description and qty > 0:
+                items.append({
+                    "description": description,
+                    "qty": qty,
+                })
+
+        submit = st.form_submit_button("Generate DC PDF")
+
+    if submit:
+        if not items:
+            st.error("Please add at least one item.")
+        else:
+            pdf_path = generate_delivery_challan_pdf(
+                challan_no=challan_no,
+                challan_date=challan_date.strftime("%d-%b-%y"),
+                dispatch_date=dispatch_date.strftime("%d-%b-%y"),
+                order_date=order_date.strftime("%d-%b-%y"),
+                ref_no=ref_no,
+                consignee_name=consignee_name,
+                consignee_address=consignee_address,
+                company_name=company_name,
+                company_address=company_address,
+                place_of_supply=place_of_supply,
+                gstin=gstin,
+                phone=phone,
+                challan_type=challan_type,
+                notes=notes,
+                items=items,
+            )
+
+            with open(pdf_path, "rb") as file:
+                st.success("Delivery Challan generated.")
+                st.download_button(
+                    label="Download Delivery Challan PDF",
+                    data=file,
+                    file_name=f"Delivery_Challan_{challan_no}.pdf",
+                    mime="application/pdf",
+                )
 
 elif menu == "Reports":
     st.subheader("Shipment Report")
