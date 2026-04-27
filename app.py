@@ -112,6 +112,7 @@ class LogisticsSystem:
             available = self.inventory[source_id].get(item.item_id, 0)
             if available < item.quantity:
                 raise ValueError("Insufficient stock for one or more items.")
+    
 
         shipment_id = self.generate_id("SHIP")
         self.shipments[shipment_id] = Shipment(
@@ -124,6 +125,7 @@ class LogisticsSystem:
             notes=notes,
         )
         return shipment_id
+    
 
     def approve_shipment(self, shipment_id):
         shipment = self.shipments[shipment_id]
@@ -230,7 +232,7 @@ def generate_delivery_challan_pdf(
     notes,
     items,
     dc_type,
-    logo_path=str(Path(__file__).parent / "assets" / "logo.png")
+    logo_path=str(Path(__file__).parent / "logo.png")
 ):
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf_path = temp_file.name
@@ -713,7 +715,7 @@ elif menu == "Generate Delivery Challan":
                 notes=notes,
                 items=items,
                 dc_type=dc_type,
-                logo_path=str(Path(__file__).parent / "assets" / "logo.png")
+                logo_path=str(Path(__file__).parent /"logo.png")
             )
 
             with open(pdf_path, "rb") as file:
