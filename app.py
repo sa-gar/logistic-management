@@ -230,7 +230,7 @@ def generate_delivery_challan_pdf(
     notes,
     items,
     dc_type,
-    logo_path="assets/logo.png",
+    logo_path=str(Path(__file__).parent / "assets" / "logo.png")
 ):
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf_path = temp_file.name
@@ -710,7 +710,7 @@ elif menu == "Generate Delivery Challan":
                 notes=notes,
                 items=items,
                 dc_type=dc_type,
-                logo_path="assets/logo.png",
+                logo_path=str(Path(__file__).parent / "assets" / "logo.png")
             )
 
             with open(pdf_path, "rb") as file:
