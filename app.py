@@ -9,6 +9,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 from reportlab.lib.units import mm
 import tempfile
+import os
+
 
 
 
@@ -216,16 +218,18 @@ def generate_delivery_challan_pdf(
     dispatch_date,
     order_date,
     ref_no,
-    consignee_name,
-    consignee_address,
     company_name,
     company_address,
+    consignee_name,
+    consignee_address,
     place_of_supply,
     gstin,
     phone,
     challan_type,
     notes,
     items,
+    dc_type,
+    logo_path="assets/logo.png",
 ):
     temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
     pdf_path = temp_file.name
@@ -234,33 +238,31 @@ def generate_delivery_challan_pdf(
     c = canvas.Canvas(pdf_path, pagesize=A4)
     width, height = A4
 
-    # Border
     c.rect(12 * mm, 12 * mm, width - 24 * mm, height - 24 * mm)
 
-    # Title
     c.setFont("Helvetica-Bold", 16)
     c.drawCentredString(width / 2, height - 25 * mm, "DELIVERY CHALLAN")
 
-    c.setFont("Helvetica", 9)
-
-    # Left company block
-    y = height - 42 * mm
     c.setFont("Helvetica-Bold", 9)
-    c.drawString(18 * mm, y, company_name)
-    c.setFont("Helvetica", 8)
-    y -= 5 * mm
+    c.drawString(18 * mm, height - 38 * mm, f"Delivery Challan# - {challan_no}")
 
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(18 * mm, height - 50 * mm, company_name)
+
+    c.setFont("Helvetica", 8)
+    y = height - 56 * mm
     for line in company_address.split("\n"):
         c.drawString(18 * mm, y, line)
         y -= 4 * mm
 
+    y -= 2 * mm
     c.drawString(18 * mm, y, f"GSTIN: {gstin}")
     y -= 4 * mm
     c.drawString(18 * mm, y, f"Phone: {phone}")
 
-    # Right challan details
     x = 125 * mm
-    y = height - 42 * mm
+    y = height - 50 * mm
+
     details = [
         ("Delivery Challan #", challan_no),
         ("Challan Date #", challan_date),
@@ -278,31 +280,48 @@ def generate_delivery_challan_pdf(
         c.drawString(x + 35 * mm, y, str(value))
         y -= 5 * mm
 
-    # Consignee
-    y = height - 92 * mm
+    y = height - 105 * mm
     c.setFont("Helvetica-Bold", 9)
-    c.drawString(18 * mm, y, "Consignee:")
+
+    if dc_type == "OUTWARD":
+        c.drawString(18 * mm, y, "OUTWARD")
+        y -= 6 * mm
+        c.drawString(18 * mm, y, "Company Address:")
+        y -= 5 * mm
+
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(18 * mm, y, company_name)
+        y -= 5 * mm
+
+        c.setFont("Helvetica", 8)
+        for line in company_address.split("\n"):
+            c.drawString(18 * mm, y, line)
+            y -= 4 * mm
+
+    else:
+        c.drawString(18 * mm, y, "INWARD")
+        y -= 6 * mm
+        c.drawString(18 * mm, y, "Consignee:")
+        y -= 5 * mm
+
+        c.setFont("Helvetica-Bold", 8)
+        c.drawString(18 * mm, y, consignee_name)
+        y -= 5 * mm
+
+        c.setFont("Helvetica", 8)
+        for line in consignee_address.split("\n"):
+            c.drawString(18 * mm, y, line)
+            y -= 4 * mm
+
     y -= 5 * mm
-
-    c.drawString(18 * mm, y, consignee_name)
-    y -= 5 * mm
-
-    c.setFont("Helvetica", 8)
-    for line in consignee_address.split("\n"):
-        c.drawString(18 * mm, y, line)
-        y -= 4 * mm
-
-    # Notes
-    y -= 4 * mm
     c.setFont("Helvetica-Bold", 8)
     c.drawString(18 * mm, y, "Notes:")
     c.setFont("Helvetica", 8)
     c.drawString(35 * mm, y, notes)
 
-    # Item table
-    table_y = height - 135 * mm
-    c.setFont("Helvetica-Bold", 9)
+    table_y = height - 150 * mm
 
+    c.setFont("Helvetica-Bold", 9)
     c.rect(18 * mm, table_y, 174 * mm, 10 * mm)
     c.drawString(22 * mm, table_y + 3 * mm, "SR No.")
     c.drawString(45 * mm, table_y + 3 * mm, "ITEM DESCRIPTION")
@@ -318,10 +337,20 @@ def generate_delivery_challan_pdf(
         c.drawString(172 * mm, row_y + 3 * mm, str(item["qty"]))
         row_y -= 10 * mm
 
-    # Footer
-    c.setFont("Helvetica", 8)
-    c.drawString(18 * mm, 22 * mm, "OUTWARD")
+    c.setFont("Helvetica-Bold", 8)
+    c.drawString(18 * mm, 22 * mm, dc_type)
     c.drawRightString(width - 18 * mm, 22 * mm, "Page 1")
+
+    if logo_path and os.path.exists(logo_path):
+        c.drawImage(
+            logo_path,
+            140 * mm,
+            28 * mm,
+            width=40 * mm,
+            height=25 * mm,
+            preserveAspectRatio=True,
+            mask="auto",
+        )
 
     c.save()
     return pdf_path
@@ -579,10 +608,9 @@ elif menu == "Manage Shipments":
 elif menu == "Generate Delivery Challan":
     st.subheader("Generate Delivery Challan")
 
-    loc_map = location_options(system)
-    item_map = item_options(system)
-
     with st.form("dc_form"):
+        dc_type = st.selectbox("DC Type", ["OUTWARD", "INWARD"])
+
         col1, col2 = st.columns(2)
 
         with col1:
@@ -599,7 +627,7 @@ elif menu == "Generate Delivery Challan":
             challan_type = st.text_input("Challan Type", "Material/Accessories")
             notes = st.text_input("Notes", "FOR REPAIRING")
 
-        st.markdown("### Company Details")
+        st.markdown("### Default Company Details")
 
         company_name = st.text_input(
             "Company Name",
@@ -612,24 +640,27 @@ elif menu == "Generate Delivery Challan":
             "Service Rd, Marathahalli, Bengaluru, Karnataka 560037",
         )
 
-        st.markdown("### Consignee Details")
+        if dc_type == "INWARD":
+            st.markdown("### Consignee Details")
 
-        consignee_name = st.text_input(
-            "Consignee Name",
-            "ZOBOCON ENGINEERING PVT LTD",
-        )
+            consignee_name = st.text_input(
+                "Consignee Name",
+                "Enter Consignee Name",
+            )
 
-        consignee_address = st.text_area(
-            "Consignee Address",
-            "25, 2nd Floor, Karna Sree Point, Opposite Kalamandir Outer Ring Road,\n"
-            "Service Rd, Marathahalli, Bengaluru, Karnataka 560037",
-        )
+            consignee_address = st.text_area(
+                "Consignee Address",
+                "Enter Consignee Address",
+            )
+        else:
+            consignee_name = company_name
+            consignee_address = company_address
 
         st.markdown("### Items")
 
         items = []
 
-        for i in range(1, 6):
+        for i in range(1, 8):
             col_a, col_b = st.columns([4, 1])
 
             with col_a:
@@ -648,10 +679,12 @@ elif menu == "Generate Delivery Challan":
                 )
 
             if description and qty > 0:
-                items.append({
-                    "description": description,
-                    "qty": qty,
-                })
+                items.append(
+                    {
+                        "description": description,
+                        "qty": qty,
+                    }
+                )
 
         submit = st.form_submit_button("Generate DC PDF")
 
@@ -665,16 +698,18 @@ elif menu == "Generate Delivery Challan":
                 dispatch_date=dispatch_date.strftime("%d-%b-%y"),
                 order_date=order_date.strftime("%d-%b-%y"),
                 ref_no=ref_no,
-                consignee_name=consignee_name,
-                consignee_address=consignee_address,
                 company_name=company_name,
                 company_address=company_address,
+                consignee_name=consignee_name,
+                consignee_address=consignee_address,
                 place_of_supply=place_of_supply,
                 gstin=gstin,
                 phone=phone,
                 challan_type=challan_type,
                 notes=notes,
                 items=items,
+                dc_type=dc_type,
+                logo_path="assets/logo.png",
             )
 
             with open(pdf_path, "rb") as file:
@@ -682,7 +717,7 @@ elif menu == "Generate Delivery Challan":
                 st.download_button(
                     label="Download Delivery Challan PDF",
                     data=file,
-                    file_name=f"Delivery_Challan_{challan_no}.pdf",
+                    file_name=f"Delivery_Challan_{dc_type}_{challan_no}.pdf",
                     mime="application/pdf",
                 )
 elif menu == "Reports":
